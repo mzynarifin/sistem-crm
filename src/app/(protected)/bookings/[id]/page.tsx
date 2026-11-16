@@ -57,7 +57,7 @@ export default async function BookingDetailPage({
   const { data: bookingRow, error: bookingErr } = await supabase
     .from('bookings')
     .select(
-      '*, leads(id, full_name, phone, email), units(id, unit_code, block_number, catalog_price, status, property_projects(id, name), property_types(id, name)), promotions(id, code, name), teams(id, code, name)'
+      'id, reference_number, lead_id, unit_id, current_sales_id, payment_method, catalog_price_snapshot, promo_discount_snapshot, agreed_final_price, booking_fee_amount, is_booking_fee_part_of_dp, agreed_dp_total_amount, status, booked_at, expires_at, confirmed_at, cancelled_at, cancellation_reason, refund_policy_type, agreed_refund_amount, forfeited_retained_amount, notes, leads(id, full_name, phone, email), units(id, unit_code, block_number, catalog_price, status, property_projects(id, name), property_types(id, name)), promotions(id, code, name), teams(id, code, name)'
     )
     .eq('id', id)
     .maybeSingle();

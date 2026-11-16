@@ -69,7 +69,9 @@ export default async function LeadDetailPage({
   // 1. Ambil baris Lead utama (RLS akan menolak jika tidak memiliki akses)
   const { data: leadRow, error: leadErr } = await supabase
     .from('leads')
-    .select('*')
+    .select(
+      'id, full_name, email, phone, occupation, preferred_city, preferred_project_id, preferred_property_type_id, preferred_payment_method, budget_amount, purchase_timeline, payment_readiness, lead_source, lead_temperature, pipeline_stage, prospect_score, score_breakdown, assigned_sales_id, team_id, lost_reason, last_interaction_at, created_at, updated_at'
+    )
     .eq('id', id)
     .maybeSingle();
 

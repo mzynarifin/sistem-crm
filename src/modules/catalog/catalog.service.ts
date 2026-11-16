@@ -129,7 +129,9 @@ export const CatalogService = {
     const supabase = await createSupabaseServerClient();
     let query = supabase
       .from('v_unit_catalog')
-      .select('*')
+      .select(
+        'id, project_id, project_code, project_name, project_city, developer_id, developer_name, property_type_id, property_type_code, property_type_name, unit_code, block_number, land_area, building_area, catalog_price, orientation, is_hook, status, current_holder_sales_id, current_holder_sales_name, current_holder_team_id, current_holder_team_name, status_updated_at'
+      )
       .order('project_name', { ascending: true })
       .order('unit_code', { ascending: true });
 

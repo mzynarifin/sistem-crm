@@ -3,9 +3,11 @@
 
 import React from 'react';
 import dynamicImport from 'next/dynamic';
+import { after } from 'next/server';
 import { requirePageAuth } from '@/modules/identity/auth/auth.guards';
 import { createSupabaseServerClient } from '@/lib/supabase/server';
 import { ExecutiveMetricsService } from '@/modules/analytics/metrics.service';
+import { ReminderSweepOrchestrator } from '@/modules/notifications-engine/reminder-sweep.orchestrator';
 import {
   getElapsedHoursSince,
   getRemainingHoursUntil,
@@ -57,6 +59,11 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
     requirePageAuth(['ADMIN', 'SUPERVISOR', 'SALES']),
     searchParams ? searchParams : Promise.resolve({} as { error?: string }),
   ]);
+
+  after(() => {
+    return ReminderSweepOrchestrator.triggerThrottledOnAccessSweepSafe();
+  });
+
   const [metrics, supabase] = await Promise.all([
     ExecutiveMetricsService.getStandardizedMetrics(),
     createSupabaseServerClient(),

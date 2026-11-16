@@ -4,7 +4,6 @@
 import 'server-only';
 import { createSupabaseServerClient } from '@/lib/supabase/server';
 import { translateDatabaseOrRpcError } from '@/lib/errors/app-error';
-import { ReminderSweepOrchestrator } from '@/modules/notifications-engine/reminder-sweep.orchestrator';
 
 export interface StandardizedExecutiveMetrics {
   // 1. Metrik Lead & Temperatur
@@ -50,11 +49,10 @@ export const ExecutiveMetricsService = {
   /**
    * Mengambil seluruh metrik standar sesuai cakupan RLS pengguna yang sedang login
    * (Sales = Pribadi, Supervisor = Timnya, Admin = Seluruh Perusahaan).
+   * Side effect system sweep dijadwalkan oleh page layer dengan `after()` agar
+   * tidak memblokir response metrik.
    */
   async getStandardizedMetrics(): Promise<StandardizedExecutiveMetrics> {
-    // Picu evaluasi waktu ringan secara throttled (On-Access Check PD-05)
-    await ReminderSweepOrchestrator.triggerThrottledOnAccessSweepSafe();
-
     const supabase = await createSupabaseServerClient();
 
     const [

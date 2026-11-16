@@ -2,10 +2,12 @@
 // Server Component Halaman Laporan Eksekutif / Tim (/reports — ADMIN & SUPERVISOR only)
 
 import React from 'react';
+import { after } from 'next/server';
 import { requirePageAuth } from '@/modules/identity/auth/auth.guards';
 import { createSupabaseServerClient } from '@/lib/supabase/server';
 import { translateDatabaseOrRpcError } from '@/lib/errors/app-error';
 import { ExecutiveMetricsService } from '@/modules/analytics/metrics.service';
+import { ReminderSweepOrchestrator } from '@/modules/notifications-engine/reminder-sweep.orchestrator';
 import {
   ReportsWorkspaceClient,
   type AuditLogItemDto,
@@ -18,6 +20,10 @@ export const dynamic = 'force-dynamic';
 export default async function ReportsPage() {
   // SALES otomatis dialihkan ke /dashboard?error=forbidden oleh requirePageAuth
   const user = await requirePageAuth(['ADMIN', 'SUPERVISOR']);
+  after(() => {
+    return ReminderSweepOrchestrator.triggerThrottledOnAccessSweepSafe();
+  });
+
   const supabase = await createSupabaseServerClient();
   const isAdmin = user.systemRole === 'ADMIN';
 
