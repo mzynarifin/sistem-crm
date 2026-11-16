@@ -1,14 +1,13 @@
 // Lokasi: src/components/layout/AppTopbar.tsx
-// Komponen Topbar Kontekstual + Tombol Sinkronisasi Sistem (Khusus ADMIN) sesuai DESIGN.md v2.1 Bagian 5.2
+// Komponen Topbar Kontekstual sesuai DESIGN.md v2.1 Bagian 5.2
 
 'use client';
 
-import React, { useState } from 'react';
+import React from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import {
   Menu,
-  RefreshCw,
   Bell,
   LogOut,
   ChevronRight,
@@ -16,10 +15,8 @@ import {
 } from 'lucide-react';
 import type { AuthenticatedUserContext } from '@/types/database.types';
 import { getInitials } from '@/lib/utils/format';
-import { runManualSystemSweepAction } from '@/modules/notifications-engine/notifications.actions';
 import { logoutAction } from '@/modules/identity/auth/auth.actions';
 import { Button } from '@/components/ui/Button';
-import { useToast } from '@/components/ui/ToastProvider';
 
 export interface AppTopbarProps {
   user: AuthenticatedUserContext;
@@ -50,8 +47,6 @@ export function AppTopbar({
 }: AppTopbarProps) {
   const pathname = usePathname();
   const router = useRouter();
-  const { showToast } = useToast();
-  const [isSyncing, setIsSyncing] = useState(false);
   const prefetchedHrefs = React.useRef(new Set<string>());
 
   const prefetchOnIntent = (href: string) => {
@@ -78,37 +73,6 @@ export function AppTopbar({
       router.back();
     } else {
       router.push('/dashboard');
-    }
-  };
-
-  const handleManualSync = async () => {
-    if (user.systemRole !== 'ADMIN' || isSyncing) return;
-    setIsSyncing(true);
-    try {
-      const result = await runManualSystemSweepAction();
-      if (result.success) {
-        showToast({
-          title: 'Sinkronisasi Sistem Berhasil',
-          description: result.message,
-          tone: 'success',
-        });
-        router.refresh();
-      } else {
-        showToast({
-          title: 'Sinkronisasi Gagal',
-          description: result.message,
-          correlationId: result.correlationId,
-          tone: 'error',
-        });
-      }
-    } catch {
-      showToast({
-        title: 'Gangguan Jaringan',
-        description: 'Tidak dapat menghubungi server untuk sinkronisasi sistem.',
-        tone: 'error',
-      });
-    } finally {
-      setIsSyncing(false);
     }
   };
 
@@ -162,25 +126,6 @@ export function AppTopbar({
 
       {/* Right: Actions & Account Controls */}
       <div className="flex shrink-0 items-center gap-1.5 sm:gap-3">
-        {/* Tombol Sinkronisasi Sistem — WAJIB HANYA UNTUK ADMIN (PD-05) */}
-        {user.systemRole === 'ADMIN' && (
-          <button
-            type="button"
-            onClick={handleManualSync}
-            disabled={isSyncing}
-            className="inline-flex h-9 items-center gap-2 rounded-md border border-[#14532D] bg-white px-3 text-xs font-semibold text-[#14532D] shadow-2xs transition-colors hover:bg-[#F0FDF4] disabled:cursor-not-allowed disabled:opacity-60"
-            title="Evaluasi Booking 72 Jam, Tagihan Overdue, dan Eskalasi SLA"
-          >
-            <RefreshCw
-              className={`h-3.5 w-3.5 shrink-0 ${isSyncing ? 'animate-spin' : ''}`}
-              strokeWidth={1.75}
-            />
-            <span className="hidden sm:inline">
-              {isSyncing ? 'Menyinkronkan...' : 'Sinkronisasi Sistem'}
-            </span>
-          </button>
-        )}
-
         {/* Notification Bell */}
         <Link
           href="/notifications"

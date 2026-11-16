@@ -150,7 +150,7 @@ export function AdminDashboardView({
       {/* 4 Kartu KPI Utama */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <KpiCard
-          label="Nilai Kontrak (CLOSED_WON)"
+          label="Nilai Kontrak"
           value={formatRupiah(metrics.salesAndContracts.totalContractedSalesValue)}
           subtext={`${metrics.salesAndContracts.salesClosingsCount} Closing • ${metrics.salesAndContracts.activeUnderContractCount} Kontrak Aktif`}
           icon={<Briefcase className="h-4 w-4" strokeWidth={1.75} />}
