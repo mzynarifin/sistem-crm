@@ -190,6 +190,11 @@ export function UsersManagementClient({
       setCreateError({
         message: 'Terjadi gangguan jaringan saat menghubungi server.',
       });
+        showToast({
+          title: 'Gagal Membuat Akun Staf',
+          description: 'Terjadi gangguan jaringan saat menghubungi server.',
+          tone: 'error',
+        });
     } finally {
       setIsCreating(false);
     }
@@ -563,6 +568,11 @@ export function UsersManagementClient({
               className="rounded-lg border border-[#FECACA] bg-[#FEF2F2] p-3 text-xs text-[#B91C1C]"
             >
               <p className="font-semibold">{createError.message}</p>
+              {createError.fieldErrors && (
+                <p className="mt-1">
+                  Periksa kembali field yang ditandai merah, lalu coba lagi.
+                </p>
+              )}
               {createError.correlationId && (
                 <p className="mt-1 font-mono text-[11px]">
                   Ref: {createError.correlationId}
@@ -572,6 +582,7 @@ export function UsersManagementClient({
           )}
 
           <Input
+            id="createStaffFullName"
             label="Nama Lengkap Staf"
             required
             value={createFullName}
@@ -583,8 +594,10 @@ export function UsersManagementClient({
 
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <Input
+              id="createStaffEmail"
               label="Email Kerja FIM-Property"
               type="email"
+              autoComplete="email"
               required
               value={createEmail}
               onChange={(e) => setCreateEmail(e.target.value)}
@@ -594,7 +607,10 @@ export function UsersManagementClient({
             />
 
             <Input
+              id="createStaffPhone"
               label="Nomor Telepon / WhatsApp"
+              type="tel"
+              autoComplete="tel"
               required
               value={createPhone}
               onChange={(e) => setCreatePhone(e.target.value)}
@@ -606,6 +622,7 @@ export function UsersManagementClient({
 
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <Select
+              id="createStaffRole"
               label="Role Sistem Utama"
               required
               value={createRole}
@@ -619,8 +636,10 @@ export function UsersManagementClient({
             />
 
             <Input
+              id="createStaffPassword"
               label="Password Awal (Min. 8 Karakter)"
               type="password"
+              autoComplete="new-password"
               required
               minLength={8}
               value={createPassword}

@@ -51,54 +51,116 @@ export const ProfilesService = {
       });
 
     if (authError || !authData.user) {
+      const authErrorCode = authError?.code?.toLowerCase() ?? '';
+      const authErrorMessage = authError?.message?.toLowerCase() ?? '';
+      const isDuplicateEmail =
+        authErrorCode === 'email_exists' ||
+        authErrorMessage.includes('already registered') ||
+        authErrorMessage.includes('already exists');
+      const isInvalidCredential =
+        authErrorCode === 'email_address_invalid' ||
+        authErrorCode === 'weak_password' ||
+        authErrorMessage.includes('password') ||
+        authErrorMessage.includes('email');
+
       throw new AppError({
-        message: `Gagal membuat kredensial autentikasi: ${authError?.message ?? 'Unknown error'}`,
-        category: 'CONFLICT_ERROR',
-        code: 'AUTH_USER_CREATION_FAILED',
-        statusCode: 400,
+        message: isDuplicateEmail
+          ? 'Email kerja tersebut sudah terdaftar. Gunakan email lain atau periksa daftar staf.'
+          : isInvalidCredential
+            ? 'Email atau password awal tidak dapat digunakan. Periksa kembali data yang dimasukkan.'
+            : 'Kredensial akun staf gagal dibuat. Silakan coba lagi atau hubungi Administrator.',
+        category: isDuplicateEmail ? 'CONFLICT_ERROR' : 'VALIDATION_ERROR',
+        code: isDuplicateEmail
+          ? 'DUPLICATE_STAFF_EMAIL'
+          : 'AUTH_USER_CREATION_FAILED',
+        statusCode: isDuplicateEmail ? 409 : 400,
       });
     }
 
     const newUserId = authData.user.id;
 
-    // 2. Simpan baris profil ke tabel public.profiles
-    const { data: profile, error: profileError } = await supabaseAdmin
-      .from('profiles')
-      .insert({
-        id: newUserId,
-        full_name: input.fullName,
-        email: input.email,
-        phone: input.phone,
-        system_role: input.systemRole,
-        is_active: true,
-      })
-      .select('*')
-      .single();
+    let profileCreated = false;
 
-    if (profileError || !profile) {
-      // Compensating rollback: hapus user dari auth.users jika gagal insert ke profiles
-      await supabaseAdmin.auth.admin.deleteUser(newUserId);
-      throw translateDatabaseOrRpcError(profileError);
+    try {
+      // 2. Simpan baris profil ke tabel public.profiles
+      const { data: profile, error: profileError } = await supabaseAdmin
+        .from('profiles')
+        .insert({
+          id: newUserId,
+          full_name: input.fullName,
+          email: input.email,
+          phone: input.phone,
+          system_role: input.systemRole,
+          is_active: true,
+        })
+        .select('*')
+        .single();
+
+      if (profileError || !profile) {
+        throw translateDatabaseOrRpcError(
+          profileError ?? { message: 'Profil staf gagal dibuat.' }
+        );
+      }
+
+      profileCreated = true;
+
+      // 3. Catat ke Audit Log
+      await AuditSink.record({
+        actorUserId: actor.userId,
+        actorRole: actor.systemRole,
+        actionType: 'STAFF_USER_CREATED',
+        entityTable: 'profiles',
+        entityId: newUserId,
+        oldValues: null,
+        newValues: {
+          full_name: profile.full_name,
+          email: profile.email,
+          system_role: profile.system_role,
+          is_active: profile.is_active,
+        },
+        reason: 'Pembuatan akun staf internal baru oleh Admin.',
+      });
+
+      return profile;
+    } catch (error) {
+      // Compensating rollback menjaga Auth, profiles, dan audit tetap konsisten
+      // jika salah satu langkah setelah pembuatan kredensial gagal.
+      if (profileCreated) {
+        const { error: profileRollbackError } = await supabaseAdmin
+          .from('profiles')
+          .delete()
+          .eq('id', newUserId);
+
+        if (profileRollbackError) {
+          serverLogger.error(
+            'Gagal membersihkan profil staf setelah pembuatan akun gagal',
+            profileRollbackError,
+            {
+              module: 'ProfilesService',
+              action: 'createStaffUser',
+              entityId: newUserId,
+            }
+          );
+        }
+      }
+
+      const { error: authRollbackError } =
+        await supabaseAdmin.auth.admin.deleteUser(newUserId);
+
+      if (authRollbackError) {
+        serverLogger.error(
+          'Gagal membersihkan kredensial Auth setelah pembuatan staf gagal',
+          authRollbackError,
+          {
+            module: 'ProfilesService',
+            action: 'createStaffUser',
+            entityId: newUserId,
+          }
+        );
+      }
+
+      throw error;
     }
-
-    // 3. Catat ke Audit Log
-    await AuditSink.record({
-      actorUserId: actor.userId,
-      actorRole: actor.systemRole,
-      actionType: 'STAFF_USER_CREATED',
-      entityTable: 'profiles',
-      entityId: newUserId,
-      oldValues: null,
-      newValues: {
-        full_name: profile.full_name,
-        email: profile.email,
-        system_role: profile.system_role,
-        is_active: profile.is_active,
-      },
-      reason: 'Pembuatan akun staf internal baru oleh Admin.',
-    });
-
-    return profile;
   },
 
   /**
