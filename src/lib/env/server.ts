@@ -20,9 +20,45 @@ const serverOnlyEnvSchema = z.object({
   KPR_SOLD_POLICY_MODE: z.literal('TC-01A').default('TC-01A'),
 });
 
+const supabaseAdminEnvSchema = z.object({
+  SUPABASE_SERVICE_ROLE_KEY: z
+    .string()
+    .min(20, 'SUPABASE_SERVICE_ROLE_KEY wajib diisi di environment server.'),
+});
+
 export type ServerEnv = ReturnType<typeof getPublicEnv> & z.infer<typeof serverOnlyEnvSchema>;
+export type SupabaseAdminEnv = ReturnType<typeof getPublicEnv> &
+  z.infer<typeof supabaseAdminEnvSchema>;
 
 let cachedServerEnv: ServerEnv | null = null;
+let cachedSupabaseAdminEnv: SupabaseAdminEnv | null = null;
+
+export function getSupabaseAdminEnv(): SupabaseAdminEnv {
+  if (cachedSupabaseAdminEnv) {
+    return cachedSupabaseAdminEnv;
+  }
+
+  const publicEnv = getPublicEnv();
+  const parsed = supabaseAdminEnvSchema.safeParse({
+    SUPABASE_SERVICE_ROLE_KEY: process.env.SUPABASE_SERVICE_ROLE_KEY,
+  });
+
+  if (!parsed.success) {
+    const formattedErrors = parsed.error.issues
+      .map((issue) => `${issue.path.join('.')}: ${issue.message}`)
+      .join('; ');
+    throw new Error(
+      `[SUPABASE_ADMIN_ENV_CONFIGURATION_ERROR] Konfigurasi Supabase Admin tidak valid: ${formattedErrors}`
+    );
+  }
+
+  cachedSupabaseAdminEnv = {
+    ...publicEnv,
+    ...parsed.data,
+  };
+
+  return cachedSupabaseAdminEnv;
+}
 
 export function getServerEnv(): ServerEnv {
   if (cachedServerEnv) {
