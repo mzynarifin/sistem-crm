@@ -40,7 +40,28 @@ export const ProfilesService = {
     actor: AuthenticatedUserContext,
     input: z.infer<typeof createStaffUserSchema>
   ) {
-    const supabaseAdmin = createSupabaseAdminClient();
+    let supabaseAdmin: ReturnType<typeof createSupabaseAdminClient>;
+
+    try {
+      supabaseAdmin = createSupabaseAdminClient();
+    } catch (error) {
+      serverLogger.error(
+        'Konfigurasi Supabase Admin tidak tersedia untuk pembuatan staf',
+        error,
+        {
+          module: 'ProfilesService',
+          action: 'createStaffUser',
+        }
+      );
+
+      throw new AppError({
+        message:
+          'Konfigurasi server untuk menambah staf belum lengkap. Pastikan SUPABASE_SERVICE_ROLE_KEY sudah diatur pada environment deployment.',
+        category: 'DATABASE_ERROR',
+        code: 'ADMIN_CLIENT_CONFIGURATION_FAILED',
+        statusCode: 500,
+      });
+    }
 
     // 1. Daftarkan kredensial ke Supabase Auth
     const { data: authData, error: authError } =

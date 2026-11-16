@@ -8,7 +8,7 @@ import { getPublicEnv } from './client';
 const serverOnlyEnvSchema = z.object({
   SUPABASE_SERVICE_ROLE_KEY: z
     .string()
-    .min(20, process.env.SUPABASE_SECRET_KEY),
+    .min(20, 'SUPABASE_SERVICE_ROLE_KEY wajib diisi di environment server.'),
   CRON_SECRET: z
     .string()
     .min(32, 'fim2026_kunci_rahasia_cron_panjang_aman_463799'),
