@@ -55,148 +55,55 @@ export const ExecutiveMetricsService = {
   async getStandardizedMetrics(): Promise<StandardizedExecutiveMetrics> {
     const supabase = await createSupabaseServerClient();
 
-    const [
-      leadsRes,
-      dealsRes,
-      verifiedPaymentsRes,
-      pendingPaymentsRes,
-      completedRefundsRes,
-      cancelledBookingsRes,
-      activeSchedulesRes,
-      unitsRes,
-      kprAppsRes,
-    ] = await Promise.all([
-      supabase
-        .from('leads')
-        .select('id, lead_temperature, pipeline_stage')
-        .not('pipeline_stage', 'in', '("CLOSED_WON","CLOSED_LOST")'),
-      supabase
-        .from('deals')
-        .select(
-          'id, final_deal_value, sales_outcome_status, contract_status, payment_settlement_status'
-        ),
-      supabase
-        .from('payment_records')
-        .select('paid_amount')
-        .eq('verification_status', 'VERIFIED'),
-      supabase
-        .from('payment_records')
-        .select('id', { count: 'exact', head: true })
-        .eq('verification_status', 'PENDING_VERIFICATION'),
-      supabase
-        .from('refund_transactions')
-        .select('refund_amount')
-        .eq('status', 'COMPLETED'),
-      supabase
-        .from('bookings')
-        .select('forfeited_retained_amount')
-        .eq('status', 'CANCELLED'),
-      supabase
-        .from('payment_schedules')
-        .select('remaining_amount, status')
-        .in('status', ['UNPAID', 'PARTIALLY_PAID', 'OVERDUE']),
-      supabase.from('units').select('status'),
-      supabase
-        .from('kpr_applications')
-        .select(
-          'approved_loan_amount, primary_disbursed_amount, subsequent_disbursed_amount, remaining_undisbursed_amount'
-        )
-        .in('application_status', ['APPROVED', 'COMPLETED'])
-        .not('approved_loan_amount', 'is', null),
-    ]);
+    const { data, error } = await supabase.rpc('rpc_get_executive_metrics');
+    if (error) {
+      throw translateDatabaseOrRpcError(error);
+    }
 
-    if (leadsRes.error) throw translateDatabaseOrRpcError(leadsRes.error);
-    if (dealsRes.error) throw translateDatabaseOrRpcError(dealsRes.error);
-    if (verifiedPaymentsRes.error) throw translateDatabaseOrRpcError(verifiedPaymentsRes.error);
-    if (pendingPaymentsRes.error) throw translateDatabaseOrRpcError(pendingPaymentsRes.error);
-    if (completedRefundsRes.error) throw translateDatabaseOrRpcError(completedRefundsRes.error);
-    if (cancelledBookingsRes.error) throw translateDatabaseOrRpcError(cancelledBookingsRes.error);
-    if (activeSchedulesRes.error) throw translateDatabaseOrRpcError(activeSchedulesRes.error);
-    if (unitsRes.error) throw translateDatabaseOrRpcError(unitsRes.error);
-    if (kprAppsRes.error) throw translateDatabaseOrRpcError(kprAppsRes.error);
-
-    const leads = leadsRes.data ?? [];
-    const deals = dealsRes.data ?? [];
-    const verifiedPayments = verifiedPaymentsRes.data ?? [];
-    const completedRefunds = completedRefundsRes.data ?? [];
-    const cancelledBookings = cancelledBookingsRes.data ?? [];
-    const activeSchedules = activeSchedulesRes.data ?? [];
-    const units = unitsRes.data ?? [];
-    const kprApps = kprAppsRes.data ?? [];
-
-    const closedWonDeals = deals.filter((d) => d.sales_outcome_status === 'CLOSED_WON');
-    const underContractDeals = deals.filter(
-      (d) => d.contract_status === 'UNDER_CONTRACT'
-    );
-
-    const grossVerifiedCashInflow = verifiedPayments.reduce(
-      (sum, r) => sum + Number(r.paid_amount),
-      0
-    );
-    const totalRefundedOutflow = completedRefunds.reduce(
-      (sum, r) => sum + Number(r.refund_amount),
-      0
-    );
-    const totalForfeitedRetainedFunds = cancelledBookings.reduce(
-      (sum, b) => sum + Number(b.forfeited_retained_amount),
-      0
-    );
-
-    const outstandingReceivablesTotal = activeSchedules.reduce(
-      (sum, s) => sum + Number(s.remaining_amount),
-      0
-    );
-    const overdueReceivablesAmount = activeSchedules
-      .filter((s) => s.status === 'OVERDUE')
-      .reduce((sum, s) => sum + Number(s.remaining_amount), 0);
+    // JSONB number di-normalisasi agar kontrak service tetap konsisten walaupun
+    // driver/database mengembalikan nilai NUMERIC sebagai string.
+    const raw = data as StandardizedExecutiveMetrics;
+    const toNumber = (value: number | string | null | undefined) => Number(value ?? 0);
 
     return {
       leads: {
-        totalActiveLeads: leads.length,
-        hotLeadsCount: leads.filter((l) => l.lead_temperature === 'HOT').length,
-        warmLeadsCount: leads.filter((l) => l.lead_temperature === 'WARM').length,
-        coldLeadsCount: leads.filter((l) => l.lead_temperature === 'COLD').length,
+        totalActiveLeads: toNumber(raw.leads.totalActiveLeads),
+        hotLeadsCount: toNumber(raw.leads.hotLeadsCount),
+        warmLeadsCount: toNumber(raw.leads.warmLeadsCount),
+        coldLeadsCount: toNumber(raw.leads.coldLeadsCount),
       },
       salesAndContracts: {
-        salesClosingsCount: closedWonDeals.length,
-        totalContractedSalesValue: closedWonDeals.reduce(
-          (sum, d) => sum + Number(d.final_deal_value),
-          0
-        ),
-        activeUnderContractCount: underContractDeals.length,
+        salesClosingsCount: toNumber(raw.salesAndContracts.salesClosingsCount),
+        totalContractedSalesValue: toNumber(raw.salesAndContracts.totalContractedSalesValue),
+        activeUnderContractCount: toNumber(raw.salesAndContracts.activeUnderContractCount),
       },
       finance: {
-        grossVerifiedCashInflow,
-        totalRefundedOutflow,
-        netVerifiedCashInflow: grossVerifiedCashInflow - totalRefundedOutflow,
-        totalForfeitedRetainedFunds,
-        outstandingReceivablesTotal,
-        overdueReceivablesAmount,
-        pendingVerificationCount: pendingPaymentsRes.count ?? 0,
+        grossVerifiedCashInflow: toNumber(raw.finance.grossVerifiedCashInflow),
+        totalRefundedOutflow: toNumber(raw.finance.totalRefundedOutflow),
+        netVerifiedCashInflow: toNumber(raw.finance.netVerifiedCashInflow),
+        totalForfeitedRetainedFunds: toNumber(raw.finance.totalForfeitedRetainedFunds),
+        outstandingReceivablesTotal: toNumber(raw.finance.outstandingReceivablesTotal),
+        overdueReceivablesAmount: toNumber(raw.finance.overdueReceivablesAmount),
+        pendingVerificationCount: toNumber(raw.finance.pendingVerificationCount),
       },
       unitInventory: {
-        availableUnitsCount: units.filter((u) => u.status === 'AVAILABLE').length,
-        heldUnitsCount: units.filter((u) => u.status === 'HELD').length,
-        unitsUnderContractOrBookedCount: units.filter((u) => u.status === 'BOOKED')
-          .length,
-        unitsFullySoldCount: units.filter((u) => u.status === 'SOLD').length,
+        availableUnitsCount: toNumber(raw.unitInventory.availableUnitsCount),
+        heldUnitsCount: toNumber(raw.unitInventory.heldUnitsCount),
+        unitsUnderContractOrBookedCount: toNumber(
+          raw.unitInventory.unitsUnderContractOrBookedCount
+        ),
+        unitsFullySoldCount: toNumber(raw.unitInventory.unitsFullySoldCount),
       },
       kprDisbursementSummary: {
-        totalApprovedLoanPlafond: kprApps.reduce(
-          (sum, k) => sum + Number(k.approved_loan_amount ?? 0),
-          0
+        totalApprovedLoanPlafond: toNumber(
+          raw.kprDisbursementSummary.totalApprovedLoanPlafond
         ),
-        totalPrimaryDisbursed: kprApps.reduce(
-          (sum, k) => sum + Number(k.primary_disbursed_amount ?? 0),
-          0
+        totalPrimaryDisbursed: toNumber(raw.kprDisbursementSummary.totalPrimaryDisbursed),
+        totalSubsequentDisbursed: toNumber(
+          raw.kprDisbursementSummary.totalSubsequentDisbursed
         ),
-        totalSubsequentDisbursed: kprApps.reduce(
-          (sum, k) => sum + Number(k.subsequent_disbursed_amount ?? 0),
-          0
-        ),
-        totalRemainingUndisbursed: kprApps.reduce(
-          (sum, k) => sum + Number(k.remaining_undisbursed_amount ?? 0),
-          0
+        totalRemainingUndisbursed: toNumber(
+          raw.kprDisbursementSummary.totalRemainingUndisbursed
         ),
       },
     };
